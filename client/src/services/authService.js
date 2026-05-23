@@ -4,10 +4,17 @@ const getToken = () => localStorage.getItem("token");
 
 export const loginSuccess = async () => {
   const response = await API.get("/auth/login/success", {
-    headers: {
-      Authorization: `Bearer ${getToken()}`,
-    },
+    headers: { Authorization: `Bearer ${getToken()}` },
   });
+  return response.data;
+};
 
+export const loginWithCredentials = async (email, password) => {
+  const response = await API.post("/auth/login", { email, password });
+  return response.data;
+};
+
+export const registerUser = async (userData) => {
+  const response = await API.post("/auth/register", userData);
   return response.data;
 };
