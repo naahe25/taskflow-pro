@@ -5,3 +5,4 @@ build
 client/node_modules
 server/node_modules
 client/dist
+node_modules
