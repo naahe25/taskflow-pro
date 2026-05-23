@@ -13,7 +13,7 @@ const {
 } = require("../controllers/projectController");
 
 const { protect } = require("../middleware/authMiddleware");
-const AdminOnly = require("../middleware/AdminMiddleware");
+const AdminOnly = require("../middleware/adminMiddleware");
 const upload = require("../utils/fileUpload");
 
 router.post("/", protect, AdminOnly, createProject);
