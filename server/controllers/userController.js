@@ -1,8 +1,11 @@
 const User = require("../models/User");
+const { buildWorkspaceQuery } = require("../utils/workspace");
 
 const getUsers = async (req, res) => {
   try {
-    const users = await User.find().sort({ createdAt: -1 });
+    const users = await User.find(buildWorkspaceQuery(req.user)).sort({
+      createdAt: -1,
+    });
 
     res.status(200).json(users);
   } catch (error) {
@@ -25,6 +28,16 @@ const promoteAdmin = async (req, res) => {
     if (req.user && req.user._id.toString() === req.params.id) {
       return res.status(403).json({
         message: "You cannot change your own role",
+      });
+    }
+
+    if (
+      req.user &&
+      user.workspaceAdminEmail !== req.user.workspaceAdminEmail &&
+      user.email !== req.user.workspaceAdminEmail
+    ) {
+      return res.status(403).json({
+        message: "You can only manage users in your workspace",
       });
     }
 

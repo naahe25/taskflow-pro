@@ -30,8 +30,8 @@ const AuthProvider = ({ children }) => {
     fetchUser();
   }, []);
 
-  const login = async (email, password) => {
-    const response = await loginWithCredentials(email, password);
+  const login = async (loginData) => {
+    const response = await loginWithCredentials(loginData);
     localStorage.setItem("token", response.token);
     setUser(response.user);
     return response.user;

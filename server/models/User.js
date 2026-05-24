@@ -12,6 +12,24 @@ const userSchema = new mongoose.Schema(
       enum: ["Admin", "member"],
       default: "member",
     },
+    workspaceAdminEmail: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    isLinked: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    adminSecretKey: {
+      type: String,
+      select: false,
+    },
+    secretKeySet: {
+      type: Boolean,
+      default: false,
+    },
     projects: [{ type: mongoose.Schema.Types.ObjectId, ref: "Project" }],
   },
   { timestamps: true },

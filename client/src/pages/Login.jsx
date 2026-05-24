@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FaEye, FaEyeSlash, FaShieldAlt, FaUser,
   FaEnvelope, FaLock, FaIdCard, FaKey,
@@ -14,17 +14,30 @@ const Login = () => {
   const [tab, setTab] = useState('signin');
   const [role, setRole] = useState('member');
   const [loading, setLoading] = useState(false);
+  const [searchParams] = useSearchParams();
 
   const [siEmail, setSiEmail] = useState('');
   const [siPassword, setSiPassword] = useState('');
+  const [siSecretKey, setSiSecretKey] = useState('');
   const [siShowPwd, setSiShowPwd] = useState(false);
+  const [siShowSecret, setSiShowSecret] = useState(false);
 
   const [rName, setRName] = useState('');
   const [rEmail, setREmail] = useState('');
   const [rPassword, setRPassword] = useState('');
   const [rConfirm, setRConfirm] = useState('');
-  const [rAdminKey, setRAdminKey] = useState('');
+  const [rAdminEmail, setRAdminEmail] = useState('');
   const [rShowPwd, setRShowPwd] = useState(false);
+
+  const [showGoogleMemberModal, setShowGoogleMemberModal] = useState(false);
+  const [googleMemberEmail, setGoogleMemberEmail] = useState('');
+  const [verifyingAdmin, setVerifyingAdmin] = useState(false);
+
+  const [showSecretKeySetup, setShowSecretKeySetup] = useState(false);
+  const [setupSecretKey, setSetupSecretKey] = useState('');
+  const [setupSecretKeyConfirm, setSetupSecretKeyConfirm] = useState('');
+  const [setupSecretShowPwd, setSetupSecretShowPwd] = useState(false);
+  const [settingSecretKey, setSettingSecretKey] = useState(false);
 
   const { login, register } = useAuth();
   const navigate = useNavigate();
@@ -38,7 +51,14 @@ const Login = () => {
     e.preventDefault();
     try {
       setLoading(true);
-      const user = await login(siEmail, siPassword);
+      const loginData = {
+        email: siEmail,
+        password: siPassword,
+      };
+      if (role === 'Admin') {
+        loginData.secretKey = siSecretKey;
+      }
+      const user = await login(loginData);
       toast.success(`Welcome back, ${user.name}!`);
       navigate('/dashboard');
     } catch (err) {
@@ -55,11 +75,21 @@ const Login = () => {
     try {
       setLoading(true);
       const user = await register({
-        name: rName, email: rEmail, password: rPassword,
-        role, adminKey: isAdmin ? rAdminKey : undefined,
+        name: rName,
+        email: rEmail,
+        password: rPassword,
+        role,
+        adminEmail: isAdmin ? undefined : rAdminEmail,
       });
-      toast.success(`Welcome to TaskFlow Pro, ${user.name}!`);
-      navigate('/dashboard');
+
+      if (isAdmin && !user.secretKeySet) {
+        setShowSecretKeySetup(true);
+        setSetupSecretKey('');
+        setSetupSecretKeyConfirm('');
+      } else {
+        toast.success(`Welcome to TaskFlow Pro, ${user.name}!`);
+        navigate('/dashboard');
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Registration failed');
     } finally {
@@ -67,11 +97,96 @@ const Login = () => {
     }
   };
 
-  const googleLogin = () => {
+  const handleSetupSecretKey = async (e) => {
+    e.preventDefault();
+    if (setupSecretKey !== setupSecretKeyConfirm) {
+      toast.error('Secret keys do not match');
+      return;
+    }
+    if (setupSecretKey.length < 6) {
+      toast.error('Secret key must be at least 6 characters');
+      return;
+    }
+
+    try {
+      setSettingSecretKey(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        import.meta.env.PROD ? '/api/auth/set-secret-key' : 'http://localhost:5000/api/auth/set-secret-key',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ secretKey: setupSecretKey }),
+        }
+      );
+
+      const data = await response.json();
+      if (!response.ok) {
+        toast.error(data.message || 'Failed to set secret key');
+        return;
+      }
+
+      toast.success('Secret key set successfully!');
+      setShowSecretKeySetup(false);
+      navigate('/dashboard');
+    } catch (err) {
+      toast.error('Error setting secret key');
+    } finally {
+      setSettingSecretKey(false);
+    }
+  };
+
+  const handleGoogleAdminVerification = async () => {
+    if (!googleMemberEmail) {
+      toast.error('Admin email is required');
+      return;
+    }
+
+    try {
+      setVerifyingAdmin(true);
+      const response = await fetch(
+        import.meta.env.PROD ? '/api/auth/verify-admin-email' : 'http://localhost:5000/api/auth/verify-admin-email',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ adminEmail: googleMemberEmail }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!data.valid) {
+        toast.error(data.message || 'Admin email not found');
+        return;
+      }
+
+      sessionStorage.setItem('googleAdminEmail', googleMemberEmail);
+      setShowGoogleMemberModal(false);
+      proceedWithGoogleAuth();
+    } catch (err) {
+      toast.error('Error verifying admin email');
+    } finally {
+      setVerifyingAdmin(false);
+    }
+  };
+
+  const proceedWithGoogleAuth = () => {
     window.open(
       import.meta.env.PROD ? '/api/auth/google' : 'http://localhost:5000/api/auth/google',
       '_self'
     );
+  };
+
+  const googleLogin = () => {
+    setShowGoogleMemberModal(true);
+  };
+
+  const handleGoogleAsAdmin = () => {
+    sessionStorage.removeItem('googleAdminEmail');
+    proceedWithGoogleAuth();
   };
 
   const features = [
@@ -94,6 +209,169 @@ const Login = () => {
       {/* Ambient glows */}
       <div className={`absolute -top-48 -right-48 w-[500px] h-[500px] bg-gradient-to-br ${gradient} opacity-[0.04] rounded-full blur-3xl pointer-events-none`} />
       <div className="absolute -bottom-48 -left-48 w-[500px] h-[500px] bg-gradient-to-br from-blue-600 to-purple-600 opacity-[0.04] rounded-full blur-3xl pointer-events-none" />
+
+      <AnimatePresence>
+        {showSecretKeySetup && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#0f1117] border border-slate-800 rounded-2xl p-7 max-w-md w-full"
+            >
+              <h3 className="text-xl font-bold text-white mb-2">Set Your Secret Key</h3>
+              <p className="text-sm text-slate-400 mb-6">Create a unique secret key that you'll use to log in to your admin account. Make sure it's something you'll remember!</p>
+
+              <form onSubmit={handleSetupSecretKey} className="space-y-4">
+                <div className="relative">
+                  <FaKey size={13} className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-400" />
+                  <input
+                    type={setupSecretShowPwd ? 'text' : 'password'}
+                    placeholder="Secret key (min. 6 characters)"
+                    value={setupSecretKey}
+                    onChange={(e) => setSetupSecretKey(e.target.value)}
+                    className={`${baseInput} pl-11 pr-12 py-3`}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setSetupSecretShowPwd(!setupSecretShowPwd)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                  >
+                    {setupSecretShowPwd ? <FaEyeSlash size={15} /> : <FaEye size={15} />}
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <FaKey size={13} className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-400" />
+                  <input
+                    type={setupSecretShowPwd ? 'text' : 'password'}
+                    placeholder="Confirm secret key"
+                    value={setupSecretKeyConfirm}
+                    onChange={(e) => setSetupSecretKeyConfirm(e.target.value)}
+                    className={`${baseInput} pl-11 pr-4 py-3 ${setupSecretKeyConfirm && setupSecretKey !== setupSecretKeyConfirm
+                      ? '!border-red-500 focus:!border-red-500'
+                      : ''
+                    }`}
+                    required
+                  />
+                  {setupSecretKeyConfirm && setupSecretKey !== setupSecretKeyConfirm && (
+                    <p className="text-red-400 text-xs mt-1 pl-1">Secret keys do not match</p>
+                  )}
+                </div>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="submit"
+                  disabled={settingSecretKey || (setupSecretKeyConfirm.length > 0 && setupSecretKey !== setupSecretKeyConfirm)}
+                  className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50 hover:shadow-lg transition-all mt-4"
+                >
+                  {settingSecretKey
+                    ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : 'Set Secret Key'}
+                </motion.button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {showGoogleMemberModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowGoogleMemberModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#0f1117] border border-slate-800 rounded-2xl p-7 max-w-md w-full"
+            >
+              <h3 className="text-xl font-bold text-white mb-2">Google Sign-In</h3>
+              <p className="text-sm text-slate-400 mb-6">Are you joining as a Member account?</p>
+
+              <div className="space-y-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    setGoogleMemberEmail('');
+                    setShowGoogleMemberModal(false);
+                  }}
+                  className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition-all"
+                >
+                  Yes, Join as Member
+                </motion.button>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-slate-700" />
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-[#0f1117] text-slate-500">or</span>
+                  </div>
+                </div>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleGoogleAsAdmin}
+                  className="w-full py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition-all"
+                >
+                  Sign In as Admin
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowGoogleMemberModal(false)}
+                  className="w-full py-2.5 bg-slate-800 text-slate-300 rounded-lg text-sm font-semibold hover:bg-slate-700 transition-colors"
+                >
+                  Cancel
+                </motion.button>
+              </div>
+
+              <AnimatePresence>
+                {googleMemberEmail !== '' && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mt-4 pt-4 border-t border-slate-700 overflow-hidden"
+                  >
+                    <label className="text-xs font-semibold text-slate-300 block mb-2">Admin Email</label>
+                    <input
+                      type="email"
+                      placeholder="Enter admin's email"
+                      value={googleMemberEmail}
+                      onChange={(e) => setGoogleMemberEmail(e.target.value)}
+                      className={`${baseInput} px-4 py-2 text-sm`}
+                    />
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      disabled={verifyingAdmin}
+                      onClick={handleGoogleAdminVerification}
+                      className="w-full mt-3 py-2.5 bg-cyan-500 text-white rounded-lg text-sm font-semibold disabled:opacity-50 hover:shadow-lg transition-all"
+                    >
+                      {verifyingAdmin ? 'Verifying...' : 'Continue with Google'}
+                    </motion.button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="relative z-10 w-full max-w-5xl mx-auto grid md:grid-cols-2 gap-12 items-center">
 
@@ -262,6 +540,27 @@ const Login = () => {
                       </button>
                     </div>
 
+                    {isAdmin && (
+                      <div className="relative">
+                        <FaKey size={13} className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-400" />
+                        <input
+                          type={siShowSecret ? 'text' : 'password'}
+                          placeholder="Your secret key"
+                          value={siSecretKey}
+                          onChange={(e) => setSiSecretKey(e.target.value)}
+                          className="w-full pl-11 pr-12 py-3 bg-purple-500/10 border border-purple-500/40 rounded-xl text-white placeholder-purple-400/40 focus:outline-none focus:border-purple-500 transition-colors"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setSiShowSecret(!siShowSecret)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-purple-400 hover:text-purple-300 transition-colors"
+                        >
+                          {siShowSecret ? <FaEyeSlash size={15} /> : <FaEye size={15} />}
+                        </button>
+                      </div>
+                    )}
+
                     <motion.button
                       whileHover={{ scale: 1.01 }}
                       whileTap={{ scale: 0.99 }}
@@ -323,6 +622,19 @@ const Login = () => {
                       />
                     </div>
 
+                    {!isAdmin && (
+                      <div className="relative">
+                        <FaEnvelope size={13} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input
+                          type="email"
+                          placeholder="Admin email (optional - leave empty for standalone)"
+                          value={rAdminEmail}
+                          onChange={(e) => setRAdminEmail(e.target.value)}
+                          className={`${baseInput} pl-11 pr-4 py-3`}
+                        />
+                      </div>
+                    )}
+
                     <div className="relative">
                       <FaLock size={13} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
                       <input
@@ -359,33 +671,6 @@ const Login = () => {
                         <p className="text-red-400 text-xs mt-1 pl-1">Passwords do not match</p>
                       )}
                     </div>
-
-                    {/* Admin Key — animated reveal */}
-                    <AnimatePresence>
-                      {isAdmin && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="relative pt-1">
-                            <FaKey size={13} className="absolute left-4 top-1/2 mt-0.5 -translate-y-1/2 text-purple-400" />
-                            <input
-                              type="password"
-                              placeholder="Admin registration key"
-                              value={rAdminKey}
-                              onChange={(e) => setRAdminKey(e.target.value)}
-                              className="w-full pl-11 pr-4 py-3 bg-purple-500/10 border border-purple-500/40 rounded-xl text-white placeholder-purple-400/40 focus:outline-none focus:border-purple-500 transition-colors"
-                              required
-                            />
-                          </div>
-                          <p className="text-xs text-purple-400/60 mt-1.5 pl-1">
-                            A secret key is required to create administrator accounts.
-                          </p>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
 
                     <motion.button
                       whileHover={{ scale: 1.01 }}

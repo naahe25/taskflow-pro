@@ -2,12 +2,19 @@ const express = require("express");
 const passport = require("passport");
 const generateToken = require("../utils/generateToken");
 const { protect } = require("../middleware/authMiddleware");
-const { registerUser, loginUser } = require("../controllers/authController");
+const {
+  registerUser,
+  loginUser,
+  verifyGoogleAdminEmail,
+  setAdminSecretKey,
+} = require("../controllers/authController");
 
 const router = express.Router();
 
 router.post("/register", registerUser);
 router.post("/login", loginUser);
+router.post("/verify-admin-email", verifyGoogleAdminEmail);
+router.post("/set-secret-key", protect, setAdminSecretKey);
 
 router.get(
   "/google",
@@ -19,9 +26,12 @@ router.get("/google/callback", (req, res, next) => {
     if (err) return next(err);
     if (!user) return res.redirect(`${process.env.CLIENT_URL}/`);
     const token = generateToken({ id: user._id });
-    return res.redirect(
-      `${process.env.CLIENT_URL}/dashboard?token=${encodeURIComponent(token)}`,
-    );
+
+    const redirectUrl = new URL(`${process.env.CLIENT_URL}/dashboard`);
+    redirectUrl.searchParams.append("token", token);
+    redirectUrl.searchParams.append("isLinked", user.isLinked ? "true" : "false");
+
+    return res.redirect(redirectUrl.toString());
   })(req, res, next);
 });
 
@@ -34,6 +44,8 @@ router.get("/login/success", protect, (req, res) => {
       email: req.user.email,
       avatar: req.user.avatar,
       role: req.user.role,
+      isLinked: req.user.isLinked || false,
+      secretKeySet: req.user.secretKeySet || false,
     },
   });
 });

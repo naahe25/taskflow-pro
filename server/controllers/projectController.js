@@ -1,14 +1,51 @@
 const Project = require("../models/Project");
 const Task = require("../models/Task");
+const User = require("../models/User");
+const { buildWorkspaceQuery } = require("../utils/workspace");
+
+const getWorkspaceUserIds = async (user) => {
+  const users = await User.find(buildWorkspaceQuery(user)).select("_id");
+  return users.map((workspaceUser) => workspaceUser._id);
+};
+
+const getProjectCreatorId = (project) => {
+  if (!project || !project.createdBy) {
+    return "";
+  }
+
+  if (typeof project.createdBy === "object" && project.createdBy._id) {
+    return project.createdBy._id.toString();
+  }
+
+  return project.createdBy.toString();
+};
+
+const canAccessProject = async (project, user) => {
+  const workspaceUserIds = await getWorkspaceUserIds(user);
+  const projectCreatorId = getProjectCreatorId(project);
+
+  return workspaceUserIds.some(
+    (workspaceUserId) => workspaceUserId.toString() === projectCreatorId,
+  );
+};
 
 const createProject = async (req, res) => {
   try {
     const { title, description, teamMembers } = req.body;
 
+    const workspaceUserIds = await getWorkspaceUserIds(req.user);
+    const allowedTeamMembers = Array.isArray(teamMembers)
+      ? teamMembers.filter((memberId) =>
+          workspaceUserIds.some(
+            (workspaceUserId) => workspaceUserId.toString() === memberId,
+          ),
+        )
+      : [];
+
     const project = await Project.create({
       title,
       description,
-      teamMembers: teamMembers || [],
+      teamMembers: allowedTeamMembers,
       createdBy: req.user._id,
     });
 
@@ -22,7 +59,11 @@ const createProject = async (req, res) => {
 
 const getProjects = async (req, res) => {
   try {
-    const projects = await Project.find()
+    const workspaceUserIds = await getWorkspaceUserIds(req.user);
+
+    const projects = await Project.find({
+      createdBy: { $in: workspaceUserIds },
+    })
       .populate("createdBy", "name email avatar")
       .populate("teamMembers", "name email avatar")
       .sort({
@@ -58,6 +99,13 @@ const deleteProject = async (req, res) => {
       });
     }
 
+    const accessible = await canAccessProject(project, req.user);
+    if (!accessible) {
+      return res.status(403).json({
+        message: "Project not found in your workspace",
+      });
+    }
+
     // Prevent orphan tasks when a project is deleted
     await Task.deleteMany({ project: project._id });
 
@@ -83,6 +131,11 @@ const getProjectById = async (req, res) => {
 
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
+    }
+
+    const accessible = await canAccessProject(project, req.user);
+    if (!accessible) {
+      return res.status(403).json({ message: "Project not found in your workspace" });
     }
 
     const totalTasks = await Task.countDocuments({ project: project._id });
@@ -111,6 +164,11 @@ const addProjectUpdate = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
+    const accessible = await canAccessProject(project, req.user);
+    if (!accessible) {
+      return res.status(403).json({ message: "Project not found in your workspace" });
+    }
+
     project.updates.push({
       message,
       user: req.user._id,
@@ -133,6 +191,11 @@ const uploadProjectFile = async (req, res) => {
 
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
+    }
+
+    const accessible = await canAccessProject(project, req.user);
+    if (!accessible) {
+      return res.status(403).json({ message: "Project not found in your workspace" });
     }
 
     if (!req.file) {
@@ -166,12 +229,25 @@ const updateProject = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
+    const accessible = await canAccessProject(project, req.user);
+    if (!accessible) {
+      return res.status(403).json({ message: "Project not found in your workspace" });
+    }
+
+    const workspaceUserIds = await getWorkspaceUserIds(req.user);
+
     project.title = title || project.title;
     project.description = description || project.description;
 
     // We allow setting teamMembers to empty array
     if (teamMembers !== undefined) {
-      project.teamMembers = teamMembers;
+      project.teamMembers = Array.isArray(teamMembers)
+        ? teamMembers.filter((memberId) =>
+            workspaceUserIds.some(
+              (workspaceUserId) => workspaceUserId.toString() === memberId,
+            ),
+          )
+        : [];
     }
 
     await project.save();

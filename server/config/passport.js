@@ -3,6 +3,7 @@ const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 
 const User = require("../models/User");
+const { normalizeEmail } = require("../utils/workspace");
 
 passport.use(
   new GoogleStrategy(
@@ -13,25 +14,45 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
+        const googleEmail = normalizeEmail(profile.emails?.[0]?.value);
+
         let user = await User.findOne({ googleId: profile.id });
 
-        if (!user) {
-          user = await User.findOne({ email: profile.emails?.[0]?.value });
+        if (!user && googleEmail) {
+          user = await User.findOne({ email: googleEmail });
         }
 
-        if (user && !user.googleId) {
-          user.googleId = profile.id;
-          user.name = user.name || profile.displayName;
-          user.avatar = user.avatar || profile.photos?.[0]?.value;
-          await user.save();
+        if (user) {
+          let shouldSave = false;
+
+          if (!user.googleId) {
+            user.googleId = profile.id;
+            shouldSave = true;
+          }
+
+          if (!user.name) {
+            user.name = profile.displayName;
+            shouldSave = true;
+          }
+
+          if (!user.avatar) {
+            user.avatar = profile.photos?.[0]?.value;
+            shouldSave = true;
+          }
+
+          if (shouldSave) {
+            await user.save();
+          }
         }
 
         if (!user) {
           user = await User.create({
             googleId: profile.id,
             name: profile.displayName,
-            email: profile.emails?.[0]?.value,
+            email: googleEmail,
             avatar: profile.photos?.[0]?.value,
+            workspaceAdminEmail: googleEmail,
+            isLinked: false,
           });
         }
 
@@ -43,7 +64,6 @@ passport.use(
   ),
 );
 
-// Required for req.user to exist on subsequent requests
 passport.serializeUser((user, done) => {
   done(null, user._id);
 });

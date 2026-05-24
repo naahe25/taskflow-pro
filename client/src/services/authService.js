@@ -9,8 +9,8 @@ export const loginSuccess = async () => {
   return response.data;
 };
 
-export const loginWithCredentials = async (email, password) => {
-  const response = await API.post("/auth/login", { email, password });
+export const loginWithCredentials = async (loginData) => {
+  const response = await API.post("/auth/login", loginData);
   return response.data;
 };
 

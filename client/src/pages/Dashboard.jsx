@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FaProjectDiagram, FaTasks, FaUsers, FaChartBar } from 'react-icons/fa';
+import { FaProjectDiagram, FaTasks, FaUsers, FaChartBar, FaInfoCircle } from 'react-icons/fa';
 import Layout from '../components/layout/Layout';
 import Navbar from '../components/layout/Navbar';
 import useAuth from '../hooks/useAuth';
@@ -10,6 +11,7 @@ import Skeleton from '../components/common/Skeleton';
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     activeProjectsCount: 0,
     tasksCount: 0,
@@ -33,6 +35,8 @@ const Dashboard = () => {
     fetchStats();
   }, []);
 
+  const isUnlinkedMember = user && user.role === 'member' && !user.isLinked && user.email === user.workspaceAdminEmail;
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -55,6 +59,23 @@ const Dashboard = () => {
         className="p-8"
       >
         <Navbar />
+
+        {isUnlinkedMember && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-start gap-4"
+          >
+            <FaInfoCircle className="text-blue-400 text-lg mt-1 shrink-0" />
+            <div>
+              <p className="text-blue-300 font-semibold mb-1">Standalone Account</p>
+              <p className="text-blue-200/80 text-sm">
+                Your account is not linked to any admin workspace. To join a team, ask your admin to add you, or you can start your own as an admin.
+              </p>
+            </div>
+          </motion.div>
+        )}
+
         <motion.div variants={itemVariants} className="mb-12">
           <h1 className="text-5xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-2">
             Welcome back, {user?.name}! 👋

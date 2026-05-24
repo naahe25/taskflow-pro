@@ -1,24 +1,41 @@
 const Task = require("../models/Task");
+const Project = require("../models/Project");
+const User = require("../models/User");
+const { buildWorkspaceQuery } = require("../utils/workspace");
 
 const createTask = async (req, res) => {
   try {
-    const {
-      title,
+    const { title, description, assignedTo, project } = req.body;
 
-      description,
+    const workspaceQuery = buildWorkspaceQuery(req.user);
+    const projectDoc = await Project.findOne({
+      _id: project,
+      ...workspaceQuery,
+    });
 
-      assignedTo,
+    if (!projectDoc) {
+      return res.status(403).json({
+        message: "Project not found in your workspace",
+      });
+    }
 
-      project,
-    } = req.body;
+    if (assignedTo) {
+      const assignee = await User.findOne({
+        _id: assignedTo,
+        ...workspaceQuery,
+      });
+
+      if (!assignee) {
+        return res.status(400).json({
+          message: "Assigned user is not in your workspace",
+        });
+      }
+    }
 
     const task = await Task.create({
       title,
-
       description,
-
       assignedTo,
-
       project,
     });
 
@@ -32,12 +49,15 @@ const createTask = async (req, res) => {
 
 const getTasks = async (req, res) => {
   try {
-    const tasks = await Task.find()
+    const workspaceProjectIds = await Project.find(buildWorkspaceQuery(req.user)).select(
+      "_id",
+    );
 
+    const tasks = await Task.find({
+      project: { $in: workspaceProjectIds.map((project) => project._id) },
+    })
       .populate("assignedTo", "name email avatar")
-
       .populate("project", "title")
-
       .sort({
         createdAt: -1,
       });
@@ -60,6 +80,14 @@ const updateTaskStatus = async (req, res) => {
       });
     }
 
+    const project = await Project.findById(task.project);
+
+    if (!project || project.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        message: "Task not found in your workspace",
+      });
+    }
+
     task.status = req.body.status || task.status;
 
     const updatedTask = await task.save();
@@ -79,6 +107,14 @@ const deleteTask = async (req, res) => {
     if (!task) {
       return res.status(404).json({
         message: "Task not found",
+      });
+    }
+
+    const project = await Project.findById(task.project);
+
+    if (!project || project.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        message: "Task not found in your workspace",
       });
     }
 
