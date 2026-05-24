@@ -1,6 +1,6 @@
 # TaskFlow Pro
 
-A comprehensive full-stack project and task management application built with modern web technologies. TaskFlow Pro enables teams to collaborate seamlessly, manage projects efficiently, track tasks, and achieve their goals together.
+A comprehensive full-stack project and task management application built with modern web technologies. TaskFlow Pro enables teams to collaborate seamlessly, manage projects efficiently, track tasks, and maintain team accountability.
 
 **🌐 Live-Deployed-link :** [https://taskflow-pro-yx5z.onrender.com](https://taskflow-pro-yx5z.onrender.com)
 
@@ -14,13 +14,17 @@ A comprehensive full-stack project and task management application built with mo
 ### Core Functionality
 - **Authentication & Authorization**
   - Google OAuth 2.0 integration for seamless login
+  - Separate Member and Admin Sign In/Sign Up pages
+  - Secret Key Authentication for Admin account creation (extra security layer)
   - JWT-based session management
   - Role-based access control (Admin/Member)
 
 - **Project Management**
   - Create, update, and manage projects
+  - Edit and delete projects
   - Track project status (Active/Completed)
-  - Add team members to projects
+  - Add and manage team members in projects
+  - Change team member assignments
   - File management and uploads
   - Project updates and activity feed
 
@@ -278,12 +282,14 @@ npm run dev --prefix client
 ## 🔐 Authentication Flow
 
 1. User lands on Login page
-2. User clicks "Login with Google"
-3. Google OAuth popup opens
-4. User authenticates with Google
-5. Passport strategy handles callback
-6. JWT token is issued and stored
-7. User is redirected to Dashboard
+2. User selects Member or Admin Sign In/Sign Up
+3. For Admin: Enter secret key for extra authentication
+4. User clicks "Login with Google" or uses email/password
+5. Google OAuth popup opens (if selected)
+6. User authenticates with Google or email
+7. Passport strategy handles callback
+8. JWT token is issued and stored
+9. User is redirected to Dashboard
 
 ## 🎨 Key Components
 
@@ -294,7 +300,7 @@ npm run dev --prefix client
 - **ProtectedRoute** - Route wrapper for authenticated pages
 
 ### Pages
-- **Login** - Authentication page with Google OAuth
+- **Login** - Authentication page with Google OAuth and separate Member/Admin sign-in
 - **Dashboard** - Main dashboard with overview and statistics
 - **Projects** - Project listing and management
 - **ProjectDetails** - Detailed project view with tasks and team
@@ -310,6 +316,7 @@ npm run dev --prefix client
 - `email` - User email (unique)
 - `avatar` - Profile picture URL
 - `role` - User role (Admin/Member)
+- `secretKey` - Admin secret key for extra authentication
 - `projects` - Array of project references
 - `timestamps` - Created/Updated dates
 
@@ -341,6 +348,7 @@ npm run dev --prefix client
 
 - **Password Hashing** - Bcrypt for secure password storage
 - **JWT Tokens** - Secure token-based authentication
+- **Secret Key Authentication** - Extra security layer for admin accounts
 - **OAuth 2.0** - Google authentication integration
 - **Role-Based Access Control** - Admin and Member roles
 - **CORS Protection** - Cross-origin request validation
